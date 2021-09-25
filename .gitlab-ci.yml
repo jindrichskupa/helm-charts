@@ -1,0 +1,67 @@
+image:
+  name: alpine/helm:latest
+  entrypoint: [""]
+
+stages:
+  - lint
+  - build
+  - deploy
+
+lint helm charts:
+  stage: lint
+  script:
+    - helm lint helm/postgresql-client
+
+build docker image:
+  stage: build
+  image:
+    name: gcr.io/kaniko-project/executor:debug
+    entrypoint: [""]
+  script:
+    - mkdir -p /kaniko/.docker
+    - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
+    - |
+      /kaniko/executor --context docker/postgresql-client \
+      --dockerfile docker/postgresql-client/Dockerfile --build-arg POSTGRES_VERSION=$POSTGRES_VERSION \
+      --destination $CI_REGISTRY_IMAGE/postgresql-client:$POSTGRES_VERSION \
+  parallel:
+    matrix:
+      - POSTGRES_VERSION:
+          - "9.6"
+          - "10"
+          - "11"
+          - "12"
+          - "13"
+          - "14"
+          - "15"
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      changes:
+        - docker/postgresql-client/*
+        - .gitlab-ci.yml
+      when: always
+  interruptible: true  
+
+pages:
+  stage: build
+  script:
+    - mkdir public
+    - "echo -e 'User-Agent: *\nDisallow: /' > ./public/robots.txt"
+    - helm package -d public helm/postgresql-client
+    - helm repo index public --url $CI_PAGES_URL
+    - echo > public/index.html
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      changes:
+        - helm/**/*
+        - .gitlab-ci.yml
+      when: always
+  artifacts:
+    paths:
+      - public
+
+packages:
+  image: curlimages/curl:latest
+  stage: deploy
+  script:
+    - 'curl --request POST --user gitlab-ci-token:$CI_JOB_TOKEN --form "chart=@$(find . -type f -name "postgresql-client*tgz" | head -n 1)" "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/helm/api/stable/charts"'

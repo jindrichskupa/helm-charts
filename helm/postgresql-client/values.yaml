@@ -1,0 +1,15 @@
+image:
+  repository: registry.gitlab.com/jindrich.skupa/helm-charts/postgresql-client
+  pullPolicy: IfNotPresent
+  tag: "11"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+podAnnotations: {}
+podSecurityContext: {}
+securityContext: {}
+resources: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
